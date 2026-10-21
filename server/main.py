@@ -59,8 +59,8 @@ SENSITIVE_CONFIG_KEYS = {
 SKIPPED_REQUEST_LOG_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
 SKIPPED_REQUEST_LOG_PREFIXES = ("/requests",)
 
-BUNDLED_LLM_PROVIDERS = ("openai", "anthropic", "gemini")
-BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini")
+BUNDLED_LLM_PROVIDERS = ("openai", "anthropic", "gemini", "ollama")
+BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini", "ollama", "ollama_prefixed")
 
 
 def _warn_if_unconfigured() -> None:
@@ -117,6 +117,52 @@ HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "/app/history/history.db")
 DEFAULT_LLM_MODEL = os.environ.get("MEM0_DEFAULT_LLM_MODEL", "gpt-5-mini")
 DEFAULT_EMBEDDER_MODEL = os.environ.get("MEM0_DEFAULT_EMBEDDER_MODEL", "text-embedding-3-small")
 
+# Provider/endpoint selection is env-driven so one image serves both the local
+# (all-Ollama) test and the Oracle prod (local Ollama embedder + remote LLM)
+# deployments. Unset -> the original OpenAI defaults, so upstream behavior is
+# unchanged. See .env.example.* templates.
+EMBEDDER_PROVIDER = os.environ.get("MEM0_EMBEDDER_PROVIDER", "openai")
+EMBEDDER_MODEL = os.environ.get("MEM0_EMBEDDER_MODEL", DEFAULT_EMBEDDER_MODEL)
+EMBEDDER_BASE_URL = os.environ.get("MEM0_EMBEDDER_BASE_URL")
+LLM_PROVIDER = os.environ.get("MEM0_LLM_PROVIDER", "openai")
+LLM_MODEL = os.environ.get("MEM0_LLM_MODEL", DEFAULT_LLM_MODEL)
+LLM_BASE_URL = os.environ.get("MEM0_LLM_BASE_URL")
+LLM_API_KEY = os.environ.get("MEM0_LLM_API_KEY", OPENAI_API_KEY)
+LLM_TEMPERATURE = float(os.environ.get("MEM0_LLM_TEMPERATURE", "0.2"))
+
+
+def _is_ollama(provider: str) -> bool:
+    return provider in ("ollama", "ollama_prefixed")
+
+
+def _embedder_dims() -> int:
+    raw = os.environ.get("MEM0_EMBEDDER_DIMS")
+    if raw:
+        return int(raw)
+    return 768 if _is_ollama(EMBEDDER_PROVIDER) else 1536
+
+
+def _build_embedder_config() -> Dict[str, Any]:
+    if _is_ollama(EMBEDDER_PROVIDER):
+        if EMBEDDER_PROVIDER == "ollama_prefixed":
+            # Make the provider name resolvable by mem0's EmbedderFactory.
+            import ollama_prefixed_embedder  # noqa: F401  (self-registers on import)
+        config: Dict[str, Any] = {"model": EMBEDDER_MODEL, "embedding_dims": _embedder_dims()}
+        if EMBEDDER_BASE_URL:
+            config["ollama_base_url"] = EMBEDDER_BASE_URL
+        return {"provider": EMBEDDER_PROVIDER, "config": config}
+    return {"provider": EMBEDDER_PROVIDER, "config": {"api_key": OPENAI_API_KEY, "model": EMBEDDER_MODEL}}
+
+
+def _build_llm_config() -> Dict[str, Any]:
+    if _is_ollama(LLM_PROVIDER):
+        config: Dict[str, Any] = {"model": LLM_MODEL, "temperature": LLM_TEMPERATURE}
+        if LLM_BASE_URL:
+            config["ollama_base_url"] = LLM_BASE_URL
+        return {"provider": LLM_PROVIDER, "config": config}
+    return {"provider": LLM_PROVIDER, "config": {"api_key": LLM_API_KEY, "temperature": LLM_TEMPERATURE, "model": LLM_MODEL}}
+
+
 DEFAULT_CONFIG = {
     "version": "v1.1",
     "vector_store": {
@@ -128,13 +174,11 @@ DEFAULT_CONFIG = {
             "user": POSTGRES_USER,
             "password": POSTGRES_PASSWORD,
             "collection_name": POSTGRES_COLLECTION_NAME,
+            "embedding_model_dims": _embedder_dims(),
         },
     },
-    "llm": {
-        "provider": "openai",
-        "config": {"api_key": OPENAI_API_KEY, "temperature": 0.2, "model": DEFAULT_LLM_MODEL},
-    },
-    "embedder": {"provider": "openai", "config": {"api_key": OPENAI_API_KEY, "model": DEFAULT_EMBEDDER_MODEL}},
+    "llm": _build_llm_config(),
+    "embedder": _build_embedder_config(),
     "history_db_path": HISTORY_DB_PATH,
 }
 
@@ -170,6 +214,11 @@ app.include_router(auth_router.router)
 app.include_router(api_keys_router.router)
 app.include_router(entities_router.router)
 app.include_router(requests_router.router)
+
+if os.environ.get("PLATFORM_COMPAT", "").lower() in {"1", "true", "yes", "on"}:
+    from routers import platform_compat  # noqa: E402
+
+    app.include_router(platform_compat.router)
 
 
 class Message(BaseModel):

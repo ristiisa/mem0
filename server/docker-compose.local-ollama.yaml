@@ -1,0 +1,55 @@
+name: mem0-local-ollama
+
+# Local test on the Mac: forked mem0 server + pgvector, both embedder and LLM
+# pointed at the Mac's local Ollama (via host.docker.internal). No dashboard.
+#   docker compose -f docker-compose.local-ollama.yaml --env-file .env up --build
+# (copy .env.example.local -> .env first, and set the secrets)
+
+services:
+  mem0:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    ports:
+      - "8888:8000"
+    env_file:
+      - .env
+    networks:
+      - mem0_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./history:/app/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run migrations for the app DB, then serve.
+    command: >
+      sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: on-failure
+    shm_size: "128mb"
+    networks:
+      - mem0_network
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d postgres -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    ports:
+      - "8432:5432"
+
+volumes:
+  postgres_db:
+
+networks:
+  mem0_network:
+    driver: bridge
