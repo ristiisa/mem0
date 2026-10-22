@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" session-start --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" session-start --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 5
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" user-prompt --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" user-prompt --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 6
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 3
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool-failure --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool-failure --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 3
           }
         ]
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" sidekick-start --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" sidekick-start --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 5
           }
         ]
@@ -66,7 +66,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" sidekick-stop --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" sidekick-stop --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 5
           }
         ]
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" stop --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" stop --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 3
           }
         ]
@@ -88,7 +88,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason pre-compact --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason pre-compact --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "statusMessage": "Saving memories from this session...",
             "timeout": 5
           }
@@ -100,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason session-end --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "command": "\"${MEM0_PYTHON:-python3}\" \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason session-end --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
             "timeout": 5
           }
         ]

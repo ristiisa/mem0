@@ -2618,7 +2618,7 @@ def test_plugin_mcp_config_starts_the_local_server():
     server = config["mcpServers"]["mem0"]
 
     assert server == {
-        "command": "python3",
+        "command": "${MEM0_PYTHON:-python3}",
         "args": ["${CLAUDE_PLUGIN_ROOT}/core/mcp_server.py"],
         "env": {"MEM0_CODE_DATA_DIR": "${CLAUDE_PLUGIN_DATA}"},
     }
