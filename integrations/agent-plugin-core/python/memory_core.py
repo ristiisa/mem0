@@ -1820,6 +1820,7 @@ def platform_headers(key: str) -> dict[str, str]:
         "Content-Type": "application/json",
         "X-Mem0-Source": _PLATFORM_SOURCE,
         "X-Mem0-Client": f"mem0-plugin/{PLUGIN_VERSION}",
+        "User-Agent": f"mem0-plugin/{PLUGIN_VERSION}",
     }
     if _PLATFORM_APPLICATION:
         headers["X-Application"] = _PLATFORM_APPLICATION

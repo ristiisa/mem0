@@ -60,6 +60,7 @@ def _run(core: Path, data_dir: Path, body: str) -> str:
             "MEM0_CODE_DATA_DIR": str(data_dir),
             "PATH": "/usr/bin:/bin",
             "HOME": str(data_dir),
+            "MEM0_TELEMETRY": "true",
         },
     )
     assert result.returncode == 0, result.stderr

@@ -114,7 +114,7 @@ RETRY_COOLDOWN_SECONDS = 60
 
 def is_enabled() -> bool:
     """Whether telemetry is switched on for this process."""
-    return os.environ.get("MEM0_TELEMETRY", "true").strip().lower() not in {
+    return os.environ.get("MEM0_TELEMETRY", "false").strip().lower() not in {
         "false",
         "0",
         "no",
