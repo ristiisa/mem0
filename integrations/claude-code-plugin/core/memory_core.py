@@ -194,6 +194,7 @@ def _git(cwd: str, *args: str) -> str:
             capture_output=True,
             text=True,
             timeout=0.5,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return ""
@@ -448,11 +449,22 @@ def clear_stale_api_key_cache() -> bool:
     return True
 
 
+def no_window_kwargs(platform: str | None = None) -> dict:
+    """Stop Windows from flashing a console window for each child process."""
+    if (platform or sys.platform) == "win32":
+        return {"creationflags": subprocess.CREATE_NO_WINDOW}
+    return {}
+
+
 def detached_process_kwargs(platform: str | None = None) -> dict:
-    """Keep a spawned worker alive after the coding agent exits, on POSIX and Windows."""
+    """Keep a spawned worker alive after the coding agent exits, on POSIX and Windows.
+
+    On Windows the worker gets its own hidden console rather than none (DETACHED_PROCESS),
+    otherwise every console child it starts (git) opens a visible window.
+    """
     if (platform or sys.platform) == "win32":
         return {
-            "creationflags": subprocess.DETACHED_PROCESS
+            "creationflags": subprocess.CREATE_NO_WINDOW
             | subprocess.CREATE_NEW_PROCESS_GROUP
         }
     return {"start_new_session": True}
