@@ -9,12 +9,13 @@ services:
     build:
       context: ..
       dockerfile: server/dev.Dockerfile
-    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --no-server-header"
     restart: unless-stopped
     expose:
       - "8000"
     environment:
       - PLATFORM_COMPAT=1
+      - MEM0_PUBLIC_SURFACE=minimal
       - MEM0_PLATFORM_TOKEN=${MEM0_PLATFORM_TOKEN}
       - MEM0_PLATFORM_USER_EMAIL=${MEM0_PLATFORM_USER_EMAIL}
       - MEM0_MCP_TOKEN=${MEM0_MCP_TOKEN}

@@ -4,6 +4,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+import surface_guard
 import telemetry
 from auth import ADMIN_API_KEY, AUTH_DISABLED, JWT_SECRET, require_admin, verify_auth
 from db import SessionLocal
@@ -197,6 +198,7 @@ app = FastAPI(
     ),
     version="1.0.0",
     redirect_slashes=False,
+    **({"docs_url": None, "redoc_url": None, "openapi_url": None} if surface_guard.enabled() else {}),
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -612,3 +614,7 @@ def reset_memory(_auth=Depends(require_admin)):
 def home():
     """Redirect to the OpenAPI documentation."""
     return RedirectResponse(url="/docs")
+
+
+if surface_guard.enabled():
+    app.add_middleware(surface_guard.SurfaceGuard)
