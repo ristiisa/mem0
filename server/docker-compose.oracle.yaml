@@ -1,0 +1,91 @@
+name: mem0-oracle
+
+# Production on the Oracle ARM box as a Coolify "Docker Compose" application.
+# Traefik (Coolify) routes example.com -> mem0:8000; no host ports are published.
+# Secrets come from Coolify environment variables (see .env.example.oracle).
+
+services:
+  mem0:
+    build:
+      context: ..
+      dockerfile: server/dev.Dockerfile
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      - PLATFORM_COMPAT=1
+      - MEM0_PLATFORM_TOKEN=${MEM0_PLATFORM_TOKEN}
+      - MEM0_PLATFORM_USER_EMAIL=${MEM0_PLATFORM_USER_EMAIL}
+      - MEM0_MCP_TOKEN=${MEM0_MCP_TOKEN}
+      - MEM0_MCP_USER_ID=${MEM0_MCP_USER_ID}
+      - AUTH_DISABLED=false
+      - JWT_SECRET=${JWT_SECRET}
+      - MEM0_TELEMETRY=false
+      - APP_DB_NAME=mem0_app
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=postgres
+      - POSTGRES_COLLECTION_NAME=memories
+      - MEM0_EMBEDDER_PROVIDER=ollama_prefixed
+      - MEM0_EMBEDDER_MODEL=embeddinggemma-2:570m
+      - MEM0_EMBEDDER_DIMS=768
+      - MEM0_EMBEDDER_BASE_URL=http://ollama:11434
+      - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - MEM0_LLM_TEMPERATURE=0.2
+    volumes:
+      - mem0_history:/app/history
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    shm_size: "128mb"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=mem0_app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -d postgres -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1
+    entrypoint: ["/bin/sh", "-c", "ollama serve & pid=$$!; sleep 5; ollama pull embeddinggemma-2:570m; wait $$pid"]
+    volumes:
+      - ollama_models:/root/.ollama
+
+  backup:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh", "-c", "while true; do sleep 60; pg_dumpall -h postgres -U postgres | gzip > /backups/mem0-$$(date +%F).sql.gz && find /backups -name '*.sql.gz' -mtime +14 -delete; sleep 86340; done"]
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  mem0_history:
+  postgres_db:
+  ollama_models:
+  backups:

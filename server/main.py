@@ -220,6 +220,11 @@ if os.environ.get("PLATFORM_COMPAT", "").lower() in {"1", "true", "yes", "on"}:
 
     app.include_router(platform_compat.router)
 
+if os.environ.get("MEM0_MCP_TOKEN"):
+    from routers import mcp_remote  # noqa: E402
+
+    app.include_router(mcp_remote.router)
+
 
 class Message(BaseModel):
     role: str = Field(..., description="Role of the message (user or assistant).")

@@ -27,5 +27,9 @@ class EmbedderConfig(BaseModel):
             "fastembed",
         ]:
             return v
-        else:
-            raise ValueError(f"Unsupported embedding provider: {provider}")
+        # Accept providers registered at runtime (e.g. by the server) in the factory.
+        from mem0.utils.factory import EmbedderFactory
+
+        if provider in EmbedderFactory.provider_to_class:
+            return v
+        raise ValueError(f"Unsupported embedding provider: {provider}")
