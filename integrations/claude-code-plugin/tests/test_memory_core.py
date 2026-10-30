@@ -2971,7 +2971,8 @@ def test_offline_hook_flow_records_evidence_without_remote_writes(isolated_env):
         assert result.returncode == 0
         assert result.stderr == ""
         if action == "session-start":
-            assert result.stdout == ""
+            # No key in this environment: the only output is the user-facing notice.
+            assert list(json.loads(result.stdout)) == ["systemMessage"]
 
     db_path = isolated_env / "hook-data" / "evidence.sqlite3"
     connection = sqlite3.connect(db_path)

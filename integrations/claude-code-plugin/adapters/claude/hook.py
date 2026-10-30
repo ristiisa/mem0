@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -15,6 +16,8 @@ sys.path.insert(0, str(_here.parent))
 import hook_runner  # noqa: E402
 import telemetry  # noqa: E402
 from memory_core import (  # noqa: E402
+    api_key,
+    clear_stale_api_key_cache,
     configure_harness,
     record_subagent_start,
     record_subagent_stop,
@@ -24,6 +27,24 @@ from transcript import record_stop  # noqa: E402
 
 configure_harness("claude-code", data_dir_name="claude-code-plugin", source_tag="claude_code_plugin")
 telemetry.init(harness="claude-code", source_tag="CLAUDE_CODE_PLUGIN")
+
+
+MISSING_KEY_NOTICE = (
+    "mem0: no API key, so memory is off. Add it under /plugin > mem0 > Configure options, "
+    "or as MEM0_API_KEY in the env block of ~/.claude/settings.json, then restart."
+)
+
+
+def _missing_key_notice() -> None:
+    """Tell the user, not the model, that the plugin is installed but has no key."""
+    if sys.argv[1:2] != ["session-start"]:
+        return
+    try:
+        clear_stale_api_key_cache()
+        if not api_key():
+            print(json.dumps({"systemMessage": MISSING_KEY_NOTICE}))
+    except Exception:
+        pass
 
 
 def _sidekick_start(store, hook_input):
@@ -42,6 +63,7 @@ def _sidekick_stop(store, hook_input):
 
 
 if __name__ == "__main__":
+    _missing_key_notice()
     hook_runner.entry_point(
         record_stop_fn=record_stop,
         extra_actions={
