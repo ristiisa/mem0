@@ -3466,11 +3466,13 @@ def test_version_is_single_sourced():
     # version is single-sourced, and it caught nothing that the agreement checks
     # below do not: fifteen places set to the same wrong value would still pass.
     assert re.fullmatch(r"\d+\.\d+\.\d+", memory_core.PLUGIN_VERSION), memory_core.PLUGIN_VERSION
-    assert manifest["version"] == memory_core.PLUGIN_VERSION
+    # The fork leaves version out of the Claude Code manifest and marketplace entries,
+    # so Claude Code versions the plugin by commit SHA and every push is an update.
+    assert "version" not in manifest
     root = REPOSITORY_ROOT
     for mp in (root / "marketplace.json", root / ".claude-plugin" / "marketplace.json"):
         entry = next(p for p in json.loads(mp.read_text())["plugins"] if p["name"] == "mem0")
-        assert entry["version"] == memory_core.PLUGIN_VERSION
+        assert "version" not in entry
         assert entry["source"] == "./integrations/claude-code-plugin"
     manifests = {
         "cursor": ".cursor-plugin/plugin.json",
