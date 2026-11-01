@@ -36,7 +36,7 @@ from typing import Any, Dict, List, Optional
 
 from auth import ADMIN_API_KEY, AUTH_DISABLED, verify_api_key_hash
 from db import Base, SessionLocal, engine
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from models import APIKey
 from server_state import get_memory_instance
@@ -201,10 +201,39 @@ def _translate_leaf(clause: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _save_event(event_id: str, status: str, results: List[Any], error: str = "") -> None:
+    with SessionLocal() as db:
+        db.merge(
+            PlatformCompatEvent(
+                event_id=event_id,
+                status=status,
+                results_json=json.dumps(results, default=str),
+                error=error,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+        db.commit()
+
+
+def _run_add(event_id: str, messages: List[Any], add_kwargs: Dict[str, Any]) -> None:
+    status = "SUCCEEDED"
+    results: List[Any] = []
+    error = ""
+    try:
+        if messages:
+            response = get_memory_instance().add(messages=messages, **add_kwargs)
+            results = response.get("results", []) if isinstance(response, dict) else []
+    except Exception as exc:  # the plugin treats FAILED as a soft failure
+        status = "FAILED"
+        error = str(exc)[:1000]
+        logger.warning("platform_add failed: %s", error)
+    _save_event(event_id, status, results, error)
+
+
 @router.post("/v3/memories/add/")
-def platform_add(payload: Dict[str, Any] = Body(...), _auth=Depends(require_token)):
-    """Run native extraction synchronously, persist the result under a new
-    event_id, and return that id for the plugin to poll."""
+def platform_add(background: BackgroundTasks, payload: Dict[str, Any] = Body(...), _auth=Depends(require_token)):
+    """Queue native extraction and return an event_id for the plugin to poll, like the
+    cloud platform. Extraction can outlast the plugin's 15s request timeout."""
     messages = payload.get("messages") or []
     metadata = dict(payload.get("metadata") or {})
     if payload.get("app_id"):
@@ -220,29 +249,8 @@ def platform_add(payload: Dict[str, Any] = Body(...), _auth=Depends(require_toke
         add_kwargs["infer"] = bool(payload["infer"])
 
     event_id = uuid.uuid4().hex
-    status = "SUCCEEDED"
-    results: List[Any] = []
-    error = ""
-    try:
-        if messages:
-            response = get_memory_instance().add(messages=messages, **add_kwargs)
-            results = response.get("results", []) if isinstance(response, dict) else []
-    except Exception as exc:  # the plugin treats FAILED as a soft failure
-        status = "FAILED"
-        error = str(exc)[:1000]
-        logger.warning("platform_add failed: %s", error)
-
-    with SessionLocal() as db:
-        db.merge(
-            PlatformCompatEvent(
-                event_id=event_id,
-                status=status,
-                results_json=json.dumps(results, default=str),
-                error=error,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            )
-        )
-        db.commit()
+    _save_event(event_id, "PROCESSING", [])
+    background.add_task(_run_add, event_id, messages, add_kwargs)
 
     return JSONResponse(
         content={"event_id": event_id, "status": "PROCESSING", "message": "Memory addition in progress"}
