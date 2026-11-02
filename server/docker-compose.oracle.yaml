@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: server/dev.Dockerfile
-    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --no-server-header"
+    command: sh start.sh
     restart: unless-stopped
     expose:
       - "8000"
@@ -30,10 +30,11 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DB=postgres
       - POSTGRES_COLLECTION_NAME=memories
-      - MEM0_EMBEDDER_PROVIDER=ollama_prefixed
-      - MEM0_EMBEDDER_MODEL=embeddinggemma-2:570m
+      - MEM0_EMBEDDER_PROVIDER=llama_prefixed
       - MEM0_EMBEDDER_DIMS=768
-      - MEM0_EMBEDDER_BASE_URL=http://ollama:11434
+      # embeddinggemma-2:570m Q8_0, the exact GGUF Ollama served, pinned by digest so stored vectors stay valid
+      - LLAMA_MODEL_URL=https://registry.ollama.ai/v2/library/embeddinggemma-2/blobs/sha256:111e84992a0406bacb70d11dddd8874001c783cc56b82c462ec82a2f5b8d08b1
+      - LLAMA_MODEL_SHA256=111e84992a0406bacb70d11dddd8874001c783cc56b82c462ec82a2f5b8d08b1
       - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER}
       - MEM0_LLM_MODEL=${MEM0_LLM_MODEL}
       - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY}
@@ -42,11 +43,10 @@ services:
       - MEM0_LLM_TEMPERATURE=0.2
     volumes:
       - mem0_history:/app/history
+      - llama_models:/models
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
 
   postgres:
     image: pgvector/pgvector:pg17
@@ -64,15 +64,6 @@ services:
     volumes:
       - postgres_db:/var/lib/postgresql/data
 
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    environment:
-      - OLLAMA_KEEP_ALIVE=-1
-    entrypoint: ["/bin/sh", "-c", "ollama serve & pid=$$!; sleep 5; ollama pull embeddinggemma-2:570m; wait $$pid"]
-    volumes:
-      - ollama_models:/root/.ollama
-
   backup:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
@@ -88,5 +79,5 @@ services:
 volumes:
   mem0_history:
   postgres_db:
-  ollama_models:
+  llama_models:
   backups:

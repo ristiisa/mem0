@@ -61,7 +61,7 @@ SKIPPED_REQUEST_LOG_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
 SKIPPED_REQUEST_LOG_PREFIXES = ("/requests",)
 
 BUNDLED_LLM_PROVIDERS = ("openai", "anthropic", "gemini", "ollama")
-BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini", "ollama", "ollama_prefixed")
+BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini", "ollama", "ollama_prefixed", "llama_prefixed")
 
 
 def _warn_if_unconfigured() -> None:
@@ -140,10 +140,17 @@ def _embedder_dims() -> int:
     raw = os.environ.get("MEM0_EMBEDDER_DIMS")
     if raw:
         return int(raw)
-    return 768 if _is_ollama(EMBEDDER_PROVIDER) else 1536
+    return 768 if _is_ollama(EMBEDDER_PROVIDER) or EMBEDDER_PROVIDER == "llama_prefixed" else 1536
 
 
 def _build_embedder_config() -> Dict[str, Any]:
+    if EMBEDDER_PROVIDER == "llama_prefixed":
+        import llama_prefixed_embedder  # noqa: F401  (self-registers on import)
+
+        config = {"embedding_dims": _embedder_dims()}
+        if EMBEDDER_BASE_URL:
+            config["openai_base_url"] = EMBEDDER_BASE_URL
+        return {"provider": EMBEDDER_PROVIDER, "config": config}
     if _is_ollama(EMBEDDER_PROVIDER):
         if EMBEDDER_PROVIDER == "ollama_prefixed":
             # Make the provider name resolvable by mem0's EmbedderFactory.
