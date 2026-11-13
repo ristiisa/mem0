@@ -10,11 +10,14 @@ import os
 import telemetry
 from memory_core import (
     EvidenceStore,
+    add_preamble,
     api_key,
     configure_harness,
     data_dir,
     doctor,
     forget_remote_repo,
+    list_preamble,
+    remove_preamble,
     resolve_repo,
     user_id,
 )
@@ -77,6 +80,14 @@ def main() -> int:
     forget.add_argument("--remote", action="store_true")
     forget.add_argument("--yes", action="store_true")
     forget.add_argument("--include-project-memory", action="store_true")
+
+    preamble = subparsers.add_parser("preamble")
+    preamble_commands = preamble.add_subparsers(dest="preamble_command", required=True)
+    preamble_commands.add_parser("list")
+    preamble_add = preamble_commands.add_parser("add")
+    preamble_add.add_argument("text")
+    preamble_remove = preamble_commands.add_parser("remove")
+    preamble_remove.add_argument("id")
 
     args = parser.parse_args()
     if args.harness:
@@ -144,6 +155,29 @@ def main() -> int:
             )
             if remote_result and remote_result.get("status") == "error":
                 return 1
+        elif args.command == "preamble":
+            if args.preamble_command == "list":
+                try:
+                    entries = list_preamble()
+                except Exception as exc:
+                    print(json.dumps({"status": "error", "error": str(exc)[:1000]}))
+                    return 1
+                print(
+                    json.dumps(
+                        [{"id": e.get("id"), "memory": e.get("memory")} for e in entries],
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+            else:
+                result = (
+                    add_preamble(args.text)
+                    if args.preamble_command == "add"
+                    else remove_preamble(args.id)
+                )
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                if result.get("status") == "error":
+                    return 1
     finally:
         store.close()
         telemetry.spawn_flush()

@@ -11,7 +11,8 @@
       "hooks/hooks.json": "hooks/hooks.json",
       "adapters/claude/hook.py": "adapters/claude/hook.py",
       "adapters/claude/transcript.py": "adapters/claude/transcript.py",
-      "agents/sidekick.md": "agents/sidekick.md"
+      "agents/sidekick.md": "agents/sidekick.md",
+      "adapters/claude/preamble-skill.md": "skills/preamble/SKILL.md"
     }
   }
 }

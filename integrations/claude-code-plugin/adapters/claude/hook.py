@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,9 +17,11 @@ sys.path.insert(0, str(_here.parent))
 import hook_runner  # noqa: E402
 import telemetry  # noqa: E402
 from memory_core import (  # noqa: E402
+    EvidenceStore,
     api_key,
     clear_stale_api_key_cache,
     configure_harness,
+    preamble_context,
     record_subagent_start,
     record_subagent_stop,
     record_tool,
@@ -47,6 +50,34 @@ def _missing_key_notice() -> None:
         pass
 
 
+def _preamble() -> None:
+    """Load the user's standing preamble into every session, whatever the repository or prompt."""
+    if sys.argv[1:2] != ["session-start"]:
+        return
+    try:
+        if "--plugin-data-dir" in sys.argv:
+            os.environ["MEM0_CODE_DATA_DIR"] = sys.argv[sys.argv.index("--plugin-data-dir") + 1]
+        if not api_key():
+            return
+        store = EvidenceStore()
+        try:
+            if store.is_paused():
+                return
+        finally:
+            store.close()
+        context = preamble_context()
+        if context:
+            telemetry.record("context_injected", trigger="preamble", context_chars=len(context))
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": context,
+                },
+            }))
+    except Exception:
+        pass
+
+
 def _sidekick_start(store, hook_input):
     context = record_subagent_start(store, {"agent_type": "mem0:sidekick", **hook_input})
     if context:
@@ -64,6 +95,7 @@ def _sidekick_stop(store, hook_input):
 
 if __name__ == "__main__":
     _missing_key_notice()
+    _preamble()
     hook_runner.entry_point(
         record_stop_fn=record_stop,
         extra_actions={

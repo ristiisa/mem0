@@ -2784,7 +2784,7 @@ def test_search_skill_describes_memory_as_optional_starting_knowledge():
 
 def test_control_skills_exposed():
     names = sorted(p.name for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir())
-    assert names == ["forget", "pause", "remember", "resume", "search", "status"]
+    assert names == ["forget", "pause", "preamble", "remember", "resume", "search", "status"]
 
 
 def test_status_skill_runs_cli_and_surfaces_auth_failures():
@@ -4637,3 +4637,51 @@ def test_delayed_handoff_survives_failed_atomic_rewrite(isolated_env, monkeypatc
 def test_json_secret_redaction_handles_escaped_quotes():
     value = json.dumps({"password": 'prefix"private suffix'})
     assert json.loads(memory_core.redact(value)) == {"password": "[REDACTED]"}
+
+
+def test_preamble_context_joins_entries_in_order(monkeypatch):
+    monkeypatch.setattr(
+        memory_core,
+        "list_preamble",
+        lambda timeout=2: [{"memory": "First rule."}, {"memory": " "}, {"memory": "Second rule."}],
+    )
+    context = memory_core.preamble_context()
+    assert context.endswith("First rule.\n\nSecond rule.")
+    monkeypatch.setenv("MEM0_CODE_PREAMBLE", "false")
+    assert memory_core.preamble_context() == ""
+
+
+def test_preamble_context_is_empty_when_the_api_fails(monkeypatch):
+    def fail(timeout=2):
+        raise OSError("offline")
+
+    monkeypatch.setattr(memory_core, "list_preamble", fail)
+    assert memory_core.preamble_context() == ""
+
+
+def test_list_preamble_scopes_to_user_and_preamble_app(monkeypatch):
+    monkeypatch.setenv("MEM0_API_KEY", "k")
+    monkeypatch.setenv("MEM0_CODE_USER_ID", "alice")
+    sent = {}
+
+    def request(url, key, payload, timeout):
+        sent.update(url=url, payload=payload)
+        return {"results": [
+            {"id": "b", "memory": "later", "app_id": "preamble", "created_at": "2026-02-01"},
+            {"id": "x", "memory": "other repo", "app_id": "repo"},
+            {"id": "a", "memory": "earlier", "metadata": {"app_id": "preamble"}, "created_at": "2026-01-01"},
+        ]}, 0, 0
+
+    monkeypatch.setattr(memory_core, "_request_json", request)
+    assert [e["id"] for e in memory_core.list_preamble()] == ["a", "b"]
+    assert sent["payload"]["filters"] == {"AND": [{"user_id": "alice"}, {"app_id": "preamble"}]}
+
+
+def test_remove_preamble_refuses_ids_outside_the_preamble(monkeypatch):
+    monkeypatch.setenv("MEM0_API_KEY", "k")
+    monkeypatch.setattr(memory_core, "list_preamble", lambda timeout=15: [{"id": "a"}])
+    deleted = []
+    monkeypatch.setattr(memory_core, "_delete_memory", lambda url, key, mid: deleted.append(mid) or True)
+    assert memory_core.remove_preamble("x")["status"] == "error"
+    assert memory_core.remove_preamble("a")["status"] == "deleted"
+    assert deleted == ["a"]

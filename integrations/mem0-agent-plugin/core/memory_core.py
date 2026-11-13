@@ -2615,6 +2615,106 @@ def forget_remote_repo(
     return {"status": "deleted", "deleted": deleted}
 
 
+# Standing instructions loaded into every session, whatever the repository.
+# They live under this user with a fixed app_id so no repo scope or search
+# relevance decides whether they appear.
+PREAMBLE_APP_ID = "preamble"
+
+
+def _preamble_filters(user: str) -> dict[str, Any]:
+    return {"AND": [{"user_id": user}, {"app_id": PREAMBLE_APP_ID}]}
+
+
+def list_preamble(timeout: float = 15) -> list[dict[str, Any]]:
+    """Return this user's preamble entries, oldest first. Raises on API errors."""
+    key = api_key()
+    user = _scope_value(user_id())
+    if not key or not user:
+        return []
+    api_url = os.environ.get("MEM0_API_URL", DEFAULT_API_URL).rstrip("/")
+    parsed, _, _ = _request_json(
+        f"{api_url}/v2/memories/?page=1&page_size={FORGET_PAGE_SIZE}",
+        key,
+        {"filters": _preamble_filters(user)},
+        timeout,
+    )
+    items = parsed.get("results") if isinstance(parsed, dict) else parsed
+    entries = [
+        item
+        for item in items or []
+        if isinstance(item, dict)
+        and str(item.get("app_id") or (item.get("metadata") or {}).get("app_id") or "")
+        == PREAMBLE_APP_ID
+    ]
+    return sorted(entries, key=lambda item: str(item.get("created_at") or ""))
+
+
+def add_preamble(text: str) -> dict[str, Any]:
+    """Store one preamble entry verbatim, without LLM extraction."""
+    key = api_key()
+    user = _scope_value(user_id())
+    if not key:
+        return {"status": "error", "error": "Mem0 API key is not configured"}
+    if not user:
+        return {"status": "error", "error": "Refusing to write: the user ID is a wildcard"}
+    text = text.strip()
+    if not text:
+        return {"status": "error", "error": "Preamble entry is empty"}
+    api_url = os.environ.get("MEM0_API_URL", DEFAULT_API_URL).rstrip("/")
+    payload = {
+        "messages": [{"role": "user", "content": text}],
+        "user_id": user,
+        "app_id": PREAMBLE_APP_ID,
+        "infer": False,
+        "metadata": {"record_kind": "preamble"},
+    }
+    try:
+        response, _, _ = _request_json_with_network_retry(
+            f"{api_url}/v3/memories/add/", key, payload, 15
+        )
+        status, _, count = _wait_for_event(api_url, key, _event_id(response))
+    except Exception as exc:
+        return {"status": "error", "error": bounded(str(exc), 1000)}
+    if status != "SUCCEEDED":
+        return {"status": "error", "error": f"Mem0 add finished as {status}"}
+    return {"status": "added", "count": count}
+
+
+def remove_preamble(memory_id: str) -> dict[str, Any]:
+    """Delete one preamble entry; refuses ids that are not this user's preamble."""
+    key = api_key()
+    if not key:
+        return {"status": "error", "error": "Mem0 API key is not configured"}
+    try:
+        known = {str(item.get("id")) for item in list_preamble()}
+    except Exception as exc:
+        return {"status": "error", "error": bounded(str(exc), 1000)}
+    if memory_id not in known:
+        return {"status": "error", "error": f"{memory_id} is not a preamble entry"}
+    api_url = os.environ.get("MEM0_API_URL", DEFAULT_API_URL).rstrip("/")
+    if not _delete_memory(api_url, key, memory_id):
+        return {"status": "error", "error": f"Could not delete {memory_id}"}
+    return {"status": "deleted", "id": memory_id}
+
+
+def preamble_context(timeout: float = 2) -> str:
+    """Format the preamble for injection at session start; empty on any failure."""
+    if not _bool_option("preamble", "MEM0_CODE_PREAMBLE", default=True):
+        return ""
+    try:
+        entries = list_preamble(timeout=timeout)
+    except Exception:
+        return ""
+    lines = []
+    for entry in entries:
+        text = redact(entry.get("memory") or entry.get("text") or "").strip()
+        if text:
+            lines.append(text)
+    if not lines:
+        return ""
+    return "Standing instructions from the user (Mem0 preamble):\n\n" + "\n\n".join(lines)
+
+
 def _doctor_mem0_authentication(repo: RepoContext) -> dict[str, Any]:
     """Verify the configured key with one read-only, repository-scoped search."""
     key = api_key()

@@ -103,6 +103,20 @@ By default the worktree branches from the repo's default branch. Set `worktree.b
 
 Categories for `--category`: `project_knowledge`, `decisions_and_constraints`, `workflows`, `problems_and_fixes`, `results`.
 
+## Preamble
+
+Standing instructions that should reach every session, in every repository and on every machine, go in the preamble. The session-start hook loads all of them into the new session's context, without searching. They are stored verbatim under your user ID with `app_id` `preamble`.
+
+Manage them with `/mem0:preamble`, or directly:
+
+```bash
+python3 core/memory_cli.py preamble list
+python3 core/memory_cli.py preamble add "Run at most 3-4 subagents in parallel."
+python3 core/memory_cli.py preamble remove <id>
+```
+
+Set `MEM0_CODE_PREAMBLE=false` to stop loading it.
+
 ## Search scope
 
 | Scope | What you get |
