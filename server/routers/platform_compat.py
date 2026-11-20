@@ -34,11 +34,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import add_queue
 from auth import ADMIN_API_KEY, AUTH_DISABLED, verify_api_key_hash
 from db import Base, SessionLocal, engine
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from models import APIKey
+from mem0.memory.main import _validate_and_trim_entity_id
 from server_state import get_memory_instance
 from sqlalchemy import String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column
@@ -215,25 +217,15 @@ def _save_event(event_id: str, status: str, results: List[Any], error: str = "")
         db.commit()
 
 
-def _run_add(event_id: str, messages: List[Any], add_kwargs: Dict[str, Any]) -> None:
-    status = "SUCCEEDED"
-    results: List[Any] = []
-    error = ""
-    try:
-        if messages:
-            response = get_memory_instance().add(messages=messages, **add_kwargs)
-            results = response.get("results", []) if isinstance(response, dict) else []
-    except Exception as exc:  # the plugin treats FAILED as a soft failure
-        status = "FAILED"
-        error = str(exc)[:1000]
-        logger.warning("platform_add failed: %s", error)
-    _save_event(event_id, status, results, error)
+# The queue reports the outcome through the event the plugin polls
+add_queue.on_finish("platform", _save_event)
 
 
 @router.post("/v3/memories/add/")
-def platform_add(background: BackgroundTasks, payload: Dict[str, Any] = Body(...), _auth=Depends(require_token)):
-    """Queue native extraction and return an event_id for the plugin to poll, like the
-    cloud platform. Extraction can outlast the plugin's 15s request timeout."""
+def platform_add(payload: Dict[str, Any] = Body(...), _auth=Depends(require_token)):
+    """Store the add in the durable queue and return an event_id for the plugin to poll,
+    like the cloud platform. Extraction can outlast the plugin's 15s request timeout,
+    and a failed extraction is retried by the queue instead of being lost."""
     messages = payload.get("messages") or []
     metadata = dict(payload.get("metadata") or {})
     if payload.get("app_id"):
@@ -244,13 +236,17 @@ def platform_add(background: BackgroundTasks, payload: Dict[str, Any] = Body(...
     add_kwargs: Dict[str, Any] = {"metadata": metadata}
     for key in _ENTITY_KEYS:
         if payload.get(key):
-            add_kwargs[key] = payload[key]
+            # Reject a bad id now: queued, it would only fail on every retry
+            try:
+                add_kwargs[key] = _validate_and_trim_entity_id(payload[key], key)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
     if payload.get("infer") is not None:
         add_kwargs["infer"] = bool(payload["infer"])
 
     event_id = uuid.uuid4().hex
     _save_event(event_id, "PROCESSING", [])
-    background.add_task(_run_add, event_id, messages, add_kwargs)
+    add_queue.enqueue("platform", messages, add_kwargs, job_id=event_id)
 
     return JSONResponse(
         content={"event_id": event_id, "status": "PROCESSING", "message": "Memory addition in progress"}

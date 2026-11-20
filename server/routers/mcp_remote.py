@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse, Response
+import add_queue
 from server_state import get_memory_instance
 
 logger = logging.getLogger(__name__)
@@ -105,15 +106,13 @@ def _call_tool(name: str, args: Dict[str, Any]) -> str:
         text = str(args.get("text") or "").strip()
         if not text:
             raise ValueError("text is required")
-        response = memory.add(
-            messages=[{"role": "user", "content": text}],
-            user_id=MCP_USER_ID,
-            metadata={"app_id": MCP_APP_ID, "mem0_source": "mcp"},
+        # Queued, so the caller does not wait for extraction and a failure is retried, not lost
+        job_id = add_queue.enqueue(
+            "mcp",
+            [{"role": "user", "content": text}],
+            {"user_id": MCP_USER_ID, "metadata": {"app_id": MCP_APP_ID, "mem0_source": "mcp"}},
         )
-        results = response.get("results", []) if isinstance(response, dict) else []
-        if not results:
-            return "Nothing new to store (already known or not a durable fact)."
-        return "\n".join(f"- {r.get('event')}: {r.get('memory')}  [id={r.get('id')}]" for r in results)
+        return f"Queued for extraction (job {job_id}); it shows up in search once processed."
     if name == "list_memories":
         limit = _int_arg(args, "limit", 50, 200)
         response = memory.get_all(filters={"user_id": MCP_USER_ID}, top_k=limit)
