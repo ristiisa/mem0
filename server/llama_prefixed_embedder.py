@@ -9,6 +9,9 @@ come up instead of failing the add or search that happens to run first.
 
 llama-server rejects inputs longer than its batch, so texts are cut to the
 model context first, the way Ollama truncated them.
+
+MEM0_EMBEDDER_BASE_URL can point at a llama-server elsewhere; MEM0_EMBEDDER_API_KEY
+is then sent as a bearer token (llama-server --api-key).
 """
 
 from __future__ import annotations
@@ -40,12 +43,16 @@ class LlamaPrefixedEmbedding(EmbeddingBase):
         self.url = base + "/embeddings"
         # /tokenize and /detokenize live at the server root, not under /v1
         self.root = base[: -len("/v1")] if base.endswith("/v1") else base
+        # Cloudflare rejects urllib's default User-Agent
+        self.headers = {"Content-Type": "application/json", "User-Agent": "mem0-server/embedder"}
+        if os.environ.get("MEM0_EMBEDDER_API_KEY"):
+            self.headers["Authorization"] = "Bearer " + os.environ["MEM0_EMBEDDER_API_KEY"]
 
     def _call(self, url, payload):
         body = json.dumps(payload).encode()
         deadline = time.monotonic() + STARTUP_WAIT_SECONDS
         while True:
-            request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+            request = urllib.request.Request(url, data=body, headers=self.headers)
             try:
                 with urllib.request.urlopen(request, timeout=60) as response:
                     return json.load(response)
