@@ -402,45 +402,26 @@ class TestEntityIdValidation:
         with pytest.raises(ValueError, match="Invalid user_id.*cannot be empty"):
             memory_instance.search("test query", filters={"user_id": "   "})
 
-    def test_search_rejects_internal_whitespace_user_id(self, memory_instance):
-        """Search should reject user_id with internal whitespace."""
-        with pytest.raises(ValueError, match="Invalid user_id.*cannot contain whitespace"):
-            memory_instance.search("test query", filters={"user_id": "user 123"})
-
-    def test_search_rejects_tab_in_user_id(self, memory_instance):
-        """Search should reject user_id with tab character."""
-        with pytest.raises(ValueError, match="Invalid user_id.*cannot contain whitespace"):
-            memory_instance.search("test query", filters={"user_id": "user\t123"})
-
     def test_get_all_rejects_whitespace_only_user_id(self, memory_instance):
         """get_all should reject whitespace-only user_id in filters."""
         with pytest.raises(ValueError, match="Invalid user_id.*cannot be empty"):
             memory_instance.get_all(filters={"user_id": "   "})
-
-    def test_get_all_rejects_internal_whitespace_user_id(self, memory_instance):
-        """get_all should reject user_id with internal whitespace."""
-        with pytest.raises(ValueError, match="Invalid user_id.*cannot contain whitespace"):
-            memory_instance.get_all(filters={"user_id": "user 123"})
 
     def test_add_rejects_whitespace_only_user_id(self, memory_instance):
         """add should reject whitespace-only user_id."""
         with pytest.raises(ValueError, match="Invalid user_id.*cannot be empty"):
             memory_instance.add("test message", user_id="   ")
 
-    def test_add_rejects_internal_whitespace_user_id(self, memory_instance):
-        """add should reject user_id with internal whitespace."""
-        with pytest.raises(ValueError, match="Invalid user_id.*cannot contain whitespace"):
-            memory_instance.add("test message", user_id="user 123")
-
     def test_delete_all_rejects_whitespace_only_user_id(self, memory_instance):
         """delete_all should reject whitespace-only user_id."""
         with pytest.raises(ValueError, match="Invalid user_id.*cannot be empty"):
             memory_instance.delete_all(user_id="   ")
 
-    def test_delete_all_rejects_internal_whitespace_user_id(self, memory_instance):
-        """delete_all should reject user_id with internal whitespace."""
-        with pytest.raises(ValueError, match="Invalid user_id.*cannot contain whitespace"):
-            memory_instance.delete_all(user_id="user 123")
+    def test_inner_whitespace_is_kept(self):
+        """Ids may contain inner whitespace, e.g. a project folder name; only the ends are trimmed."""
+        from mem0.memory.main import _validate_and_trim_entity_id
+
+        assert _validate_and_trim_entity_id("  local-My Project-abc  ", "agent_id") == "local-My Project-abc"
 
     def test_delete_all_trims_user_id_before_list(self, memory_instance):
         """delete_all should trim leading/trailing whitespace on entity IDs."""

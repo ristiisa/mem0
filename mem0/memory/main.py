@@ -178,7 +178,8 @@ def _validate_and_trim_entity_id(value: Optional[Any], name: str) -> Optional[st
     - Coerces non-string values (e.g. integer ids) to str
     - Trims leading/trailing whitespace
     - Rejects empty or whitespace-only strings
-    - Rejects strings containing internal whitespace
+    - Keeps inner whitespace: ids are compared as exact strings, and clients derive
+      them from folder names, which may contain spaces
 
     Args:
         value: The entity ID value to validate
@@ -201,10 +202,6 @@ def _validate_and_trim_entity_id(value: Optional[Any], name: str) -> Optional[st
     if trimmed == "":
         raise ValueError(
             f"Invalid {name}: cannot be empty or whitespace-only. Provide a valid identifier."
-        )
-    if any(c.isspace() for c in trimmed):
-        raise ValueError(
-            f"Invalid {name}: cannot contain whitespace. Provide a valid identifier without spaces."
         )
     return trimmed
 
