@@ -6,6 +6,9 @@ stay valid. Inputs get the same task prefixes as ``ollama_prefixed``.
 
 The model is downloaded on the first start, so calls wait for the server to
 come up instead of failing the add or search that happens to run first.
+
+llama-server rejects inputs longer than its batch, so texts are cut to the
+model context first, the way Ollama truncated them.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ PROVIDER_NAME = "llama_prefixed"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 STARTUP_WAIT_SECONDS = float(os.environ.get("MEM0_EMBEDDER_STARTUP_WAIT", "180"))
+# embeddinggemma context, minus room for the special tokens llama-server adds
+MAX_INPUT_TOKENS = int(os.environ.get("MEM0_EMBEDDER_MAX_TOKENS", "2040"))
 
 
 class LlamaPrefixedEmbedding(EmbeddingBase):
@@ -31,17 +36,19 @@ class LlamaPrefixedEmbedding(EmbeddingBase):
         super().__init__(config)
         if self.config.embedding_dims is None:
             self.config.embedding_dims = 768
-        self.url = (self.config.openai_base_url or DEFAULT_BASE_URL).rstrip("/") + "/embeddings"
+        base = (self.config.openai_base_url or DEFAULT_BASE_URL).rstrip("/")
+        self.url = base + "/embeddings"
+        # /tokenize and /detokenize live at the server root, not under /v1
+        self.root = base[: -len("/v1")] if base.endswith("/v1") else base
 
-    def _post(self, texts):
-        body = json.dumps({"input": texts}).encode()
+    def _call(self, url, payload):
+        body = json.dumps(payload).encode()
         deadline = time.monotonic() + STARTUP_WAIT_SECONDS
         while True:
-            request = urllib.request.Request(self.url, data=body, headers={"Content-Type": "application/json"})
+            request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
             try:
                 with urllib.request.urlopen(request, timeout=60) as response:
-                    data = json.load(response)["data"]
-                return [item["embedding"] for item in sorted(data, key=lambda item: item["index"])]
+                    return json.load(response)
             except urllib.error.HTTPError as exc:
                 # 503 while the model is still loading
                 if exc.code != 503 or time.monotonic() > deadline:
@@ -50,6 +57,19 @@ class LlamaPrefixedEmbedding(EmbeddingBase):
                 if time.monotonic() > deadline:
                     raise
             time.sleep(2)
+
+    def _truncate(self, text):
+        # Every token is at least one character, so short texts skip the round trip
+        if len(text) <= MAX_INPUT_TOKENS:
+            return text
+        tokens = self._call(self.root + "/tokenize", {"content": text})["tokens"]
+        if len(tokens) <= MAX_INPUT_TOKENS:
+            return text
+        return self._call(self.root + "/detokenize", {"tokens": tokens[:MAX_INPUT_TOKENS]})["content"]
+
+    def _post(self, texts):
+        data = self._call(self.url, {"input": [self._truncate(text) for text in texts]})["data"]
+        return [item["embedding"] for item in sorted(data, key=lambda item: item["index"])]
 
     def _prefix_for(self, memory_action: Optional[str]) -> str:
         return _query_prefix() if memory_action == "search" else _doc_prefix()

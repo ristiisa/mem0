@@ -15,7 +15,7 @@ if [ -n "$LLAMA_MODEL_URL" ]; then
     done
 
     while true; do
-      /opt/llama/llama-server -m "$model" --embeddings --pooling mean --host 127.0.0.1 --port 8080 -c 2048 || true
+      /opt/llama/llama-server -m "$model" --embeddings --pooling mean --host 127.0.0.1 --port 8080 -c 8192 -np 4 -b 2048 -ub 2048 || true
       echo "llama-server exited, restarting in 2s" >&2
       sleep 2
     done
