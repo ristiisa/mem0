@@ -130,6 +130,8 @@ LLM_MODEL = os.environ.get("MEM0_LLM_MODEL", DEFAULT_LLM_MODEL)
 LLM_BASE_URL = os.environ.get("MEM0_LLM_BASE_URL")
 LLM_API_KEY = os.environ.get("MEM0_LLM_API_KEY", OPENAI_API_KEY)
 LLM_TEMPERATURE = float(os.environ.get("MEM0_LLM_TEMPERATURE", "0.2"))
+# mem0's default of 2000 cuts long extraction replies off mid-JSON
+LLM_MAX_TOKENS = int(os.environ.get("MEM0_LLM_MAX_TOKENS", "8000"))
 
 
 def _is_ollama(provider: str) -> bool:
@@ -164,11 +166,11 @@ def _build_embedder_config() -> Dict[str, Any]:
 
 def _build_llm_config() -> Dict[str, Any]:
     if _is_ollama(LLM_PROVIDER):
-        config: Dict[str, Any] = {"model": LLM_MODEL, "temperature": LLM_TEMPERATURE}
+        config: Dict[str, Any] = {"model": LLM_MODEL, "temperature": LLM_TEMPERATURE, "max_tokens": LLM_MAX_TOKENS}
         if LLM_BASE_URL:
             config["ollama_base_url"] = LLM_BASE_URL
         return {"provider": LLM_PROVIDER, "config": config}
-    return {"provider": LLM_PROVIDER, "config": {"api_key": LLM_API_KEY, "temperature": LLM_TEMPERATURE, "model": LLM_MODEL}}
+    return {"provider": LLM_PROVIDER, "config": {"api_key": LLM_API_KEY, "temperature": LLM_TEMPERATURE, "max_tokens": LLM_MAX_TOKENS, "model": LLM_MODEL}}
 
 
 DEFAULT_CONFIG = {

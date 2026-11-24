@@ -44,6 +44,7 @@ services:
       - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
       - MEM0_LLM_TEMPERATURE=0.2
+      - MEM0_LLM_MAX_TOKENS=8000
     volumes:
       - mem0_history:/app/history
       - llama_models:/models

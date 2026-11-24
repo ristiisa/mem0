@@ -979,8 +979,9 @@ class Memory(MemoryBase):
                     extracted_json = extract_json(response)
                     extracted_memories = json.loads(extracted_json, strict=False).get("memory", [])
         except Exception as e:
+            # A truncated or non-JSON reply is a failed extraction, not "nothing to remember"
             logger.error(f"Error parsing extraction response: {e}")
-            extracted_memories = []
+            raise LLMError(f"Could not parse extraction response: {e}") from e
 
         if not extracted_memories:
             # Save messages even if nothing extracted
@@ -2662,7 +2663,7 @@ class AsyncMemory(MemoryBase):
                     extracted_memories = json.loads(extracted_json, strict=False).get("memory", [])
         except Exception as e:
             logger.error(f"Error parsing extraction response (async): {e}")
-            extracted_memories = []
+            raise LLMError(f"Could not parse extraction response: {e}") from e
 
         if not extracted_memories:
             await asyncio.to_thread(self.db.save_messages, messages, session_scope)
